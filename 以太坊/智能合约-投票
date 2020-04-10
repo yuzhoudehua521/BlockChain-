@@ -1,0 +1,19 @@
+pragma solidity ^0.4.0
+
+contract Ballot{
+  
+  struct Voter{
+    uint weight;
+    bool voted;
+    uint vote;
+    address delegate;
+  }
+  
+  struct Proposal{
+    bytes32 name;
+    uint votrCount;
+  }
+  
+  
+  
+    
