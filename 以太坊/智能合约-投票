@@ -36,11 +36,21 @@ contract Ballot{
         voteCount:0
         }));
      }    
+   }
+  
+  
+  //主持人chairperson给voter地址投票权利
+  function GiveRightToVote(address voter) public {
+    //判断是否投过票和给予投票权利
+    require((msg.sender == ChairPerson) && !Voters[voter].voted && (Voters[voter].weight == 0));
+    
+    //赋予投票权重
+    Voters[voter].weight = 1;
   }
-  
-  
-  
-  
+     
+  //代理投票
+  function Delegate(address to) {
+    Voter
   
   
   
