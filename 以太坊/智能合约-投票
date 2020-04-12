@@ -2,17 +2,74 @@ pragma solidity ^0.4.0
 
 contract Ballot{
   
+  //投票者数据结构
   struct Voter{
-    uint weight;
-    bool voted;
-    uint vote;
-    address delegate;
+    uint weight;       //权重
+    bool voted;        //投票与否
+    uint vote;         //投票的提案编号
+    address delegate;  //投票的委托对象
   }
   
+  //提案
   struct Proposal{
-    bytes32 name;
-    uint votrCount;
+    bytes32 name;       //提案名称
+    uint voteCount;     //得票数
   }
+  
+  //主持人
+  address ChairPerson;
+  
+  //投票者地址与投票状态
+  mapping(address => Voter) Voters;
+  
+  //提案列表
+  Proposal[] Proposals;
+  
+  //给定一个提案名称列表
+  function Ballot(bytes32[] proposalNames) {
+    Chairperson = msg.sender;
+    Voters[Chairperson].weight = 1;
+    
+    for (uint i = 0; i < proposalNames.length; i++) {
+      Proposals.push(Proposal({
+        name:proposalNames[i],
+        voteCount:0
+        }));
+     }    
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   
   
   
