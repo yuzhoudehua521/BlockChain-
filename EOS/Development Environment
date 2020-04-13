@@ -1,29 +1,158 @@
-1组件与版本
-Component	         Version
+1组件与版本（EOSIO versions）
+Component	              Version
 eosio          	          2.0.0
-eosio.cdt	          1.7.0
+eosio.cdt	                1.7.0
 eosio.contracts	          1.9.0
 
+cloes 客户端命令行交互模块
+nodeos 服务器端
+keosd 钱包管理模块
 
-
-2（Ubuntu 18.04 Debian Package Install）:
+2选择合适系统安装EOS（Ubuntu 18.04 Debian Package Install）:
 
 wget https://github.com/EOSIO/eos/releases/download/v2.0.0/eosio_2.0.0-1-ubuntu-18.04_amd64.deb
 
 sudo apt install ./eosio_2.0.4-1-ubuntu-18.04_amd64.deb
 
 
-3建立开发目录
+3建立开发目录（Setup a development directory）
 mkdir contracts
 cd contracts
 
 
-4安装合同开发工具
+4安装合同开发工具（Install the Contract Dev. Toolkit）
 Ubuntu (Debian)
 
 wget https://github.com/EOSIO/eosio.cdt/releases/download/v1.6.3/eosio.cdt_1.6.3-1-ubuntu-18.04_amd64.deb
 
 sudo apt install ./eosio.cdt_1.6.3-1-ubuntu-18.04_amd64.deb
+
+
+
+5创建开发者钱包
+
+5.1创建钱包并生成私钥（Create a Wallet）
+cleos wallet create --to-console
+
+结果显示：Creating wallet: default
+Save password to use in the future to unlock this wallet.
+Without password imported keys will not be retrievable.
+"PW5Kewn9L76X8Fpd....................t42S9XCw2"
+
+
+保存生成的私钥到一个txt文件中
+
+
+5.2打开钱包（Open the Wallet）
+
+cleos wallet open
+
+cleos wallet list
+
+显示：
+Wallets:
+[
+  "default"
+]
+
+
+5.3解锁（Unlock it）
+
+cleos wallet unlock
+然后输入创建钱包生成的私钥
+
+cleos wallet list
+显示：
+Wallets:
+[
+  "default *"
+]
+
+5.4根据钱包私钥生成公钥
+
+cleos wallet create_key
+
+显示：
+Created new private key with a public key of: "EOS8PEJ5FM42xLpHK...X6PymQu97KrGDJQY5Y"
+
+把公钥保存在txt文件中
+
+
+5.5导入开发者钥匙（Import the Development Key）
+
+cleos wallet import
+
+开发者统一公开的钥匙：5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
+
+
+
+
+6布置钱包管理模块和服务器端（Start keosd and nodeos）
+
+6.1开启钱包管理模块（Start keosd）
+
+pkill keosd
+
+keosd &
+
+
+6.2开启服务器端（Start nodeos）
+
+nodeos -e -p eosio \
+--plugin eosio::producer_plugin \
+--plugin eosio::producer_api_plugin \
+--plugin eosio::chain_api_plugin \
+--plugin eosio::http_plugin \
+--plugin eosio::history_plugin \
+--plugin eosio::history_api_plugin \
+--filter-on="*" \
+--access-control-allow-origin='*' \
+--contracts-console \
+--http-validate-host=false \
+--verbose-http-errors >> nodeos.log 2>&1 &
+
+
+6.3检查安装（Check the installation）
+
+查看日志检查服务器端是否在生成区块（Check that Nodeos is Producing Blocks）
+tail -f nodeos.log
+
+显示：
+1929001ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366974ce4e2a... #13929 @ 2018-05-23T16:32:09.000 signed by eosio [trxs: 0, lib: 13928, confirmed: 0]
+1929502ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366aea085023... #13930 @ 2018-05-23T16:32:09.500 signed by eosio [trxs: 0, lib: 13929, confirmed: 0]
+1930002ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366b7f074fdd... #13931 @ 2018-05-23T16:32:10.000 signed by eosio [trxs: 0, lib: 13930, confirmed: 0]
+1930501ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366cd8222adb... #13932 @ 2018-05-23T16:32:10.500 signed by eosio [trxs: 0, lib: 13931, confirmed: 0]
+1931002ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366d5c1ec38d... #13933 @ 2018-05-23T16:32:11.000 signed by eosio [trxs: 0, lib: 13932, confirmed: 0]
+1931501ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366e45c1f235... #13934 @ 2018-05-23T16:32:11.500 signed by eosio [trxs: 0, lib: 13933, confirmed: 0]
+1932001ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000366f98adb324... #13935 @ 2018-05-23T16:32:12.000 signed by eosio [trxs: 0, lib: 13934, confirmed: 0]
+1932501ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 00003670a0f01daa... #13936 @ 2018-05-23T16:32:12.500 signed by eosio [trxs: 0, lib: 13935, confirmed: 0]
+1933001ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 00003671e8b36e1e... #13937 @ 2018-05-23T16:32:13.000 signed by eosio [trxs: 0, lib: 13936, confirmed: 0]
+1933501ms thread-0   producer_plugin.cpp:585       block_production_loo ] Produced block 0000367257fe1623... #13938 @ 2018-05-23T16:32:13.500 signed by eosio [trxs: 0, lib: 13937, confirmed: 0]
+
+
+6.4检查钱包的账户（Check the Wallet）
+
+cleos wallet list
+
+显示：
+Wallets:
+[]
+
+
+6.5检查Nodeos的端点
+1打开浏览器：http://localhost:8888/v1/chain/get_info
+2命令行输入：curl http://localhost:8888/v1/chain/get_info
+
+
+
+7生成测试账户（Create Test Accounts）
+
+7.1
+
+
+
+
+
 
 
 
