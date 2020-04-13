@@ -7,6 +7,7 @@ eosio.contracts	          1.9.0
 cloes 客户端命令行交互模块
 nodeos 服务器端
 keosd 钱包管理模块
+eosio.cdt智能合约编译平台
 
 2选择合适系统安装EOS（Ubuntu 18.04 Debian Package Install）:
 
