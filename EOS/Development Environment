@@ -147,9 +147,45 @@ Wallets:
 
 7生成测试账户（Create Test Accounts）
 
-7.1
+7.1账户可以设置为不同权限（个人或团体），个人可以设置owner和active不同公钥，owner权限最高并可以修改密码
+
+cleos create account eosio alice YOUR_PUBLIC_KEY
+显示：
+executed transaction: 40c605006de...  200 bytes  153 us
+#         eosio <= eosio::newaccount            {"creator":"eosio","name":"alice","owner":{"threshold":1,"keys":[{"key":"EOS5rti4LTL53xptjgQBXv9HxyU...
+warning: transaction executed locally, but may not be confirmed by the network yet    ]
 
 
+cleos get account alice
+显示：
+permissions:
+     owner     1:    1 EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
+        active     1:    1 EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
+memory:
+     quota:       unlimited  used:      3.758 KiB
+
+net bandwidth:
+     used:               unlimited
+     available:          unlimited
+     limit:              unlimited
+
+cpu bandwidth:
+     used:               unlimited
+     available:          unlimited
+     limit:              unlimited
+     
+     
+7.2创建账户时，要解锁钱包
+
+cleos wallet unlock
+
+cleos wallet list
+
+显示：
+Wallets:
+[
+  "default *"
+]
 
 
 
