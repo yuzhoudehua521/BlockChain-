@@ -147,7 +147,21 @@ Wallets:
 
 7生成测试账户（Create Test Accounts）
 
-7.1账户可以设置为不同权限（个人或团体），个人可以设置owner和active不同公钥，owner权限最高并可以修改密码
+7.1建账户前，要解锁钱包
+
+cleos wallet unlock
+
+cleos wallet list
+
+显示：
+Wallets:
+[
+  "default *"
+]
+
+
+
+7.2生成账户可以设置为不同权限（个人或团体），个人可以设置owner和active不同公钥，owner权限最高并可以修改密码
 
 cleos create account eosio alice YOUR_PUBLIC_KEY
 显示：
@@ -175,17 +189,6 @@ cpu bandwidth:
      limit:              unlimited
      
      
-7.2创建账户时，要解锁钱包
-
-cleos wallet unlock
-
-cleos wallet list
-
-显示：
-Wallets:
-[
-  "default *"
-]
 
 
 
