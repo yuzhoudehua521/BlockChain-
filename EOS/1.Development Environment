@@ -32,7 +32,7 @@ sudo apt install ./eosio.cdt_1.6.3-1-ubuntu-18.04_amd64.deb
 
 5创建开发者钱包
 
-5.1创建钱包并生成私钥（Create a Wallet）
+5.1创建默认钱包并生成私钥（Create a Wallet）
 cleos wallet create --to-console
 
 结果显示：Creating wallet: default
@@ -43,6 +43,8 @@ Without password imported keys will not be retrievable.
 
 保存生成的私钥到一个txt文件中
 
+5.1.1创建自己钱包
+cleos wallet create -n name_wallet -f(私钥保存路径和文件名字) passwd
 
 5.2打开钱包（Open the Wallet）
 
