@@ -1,1 +1,78 @@
+分析：
+转账金额（Transaction的value）是公开的，无法禁止别人查看自己出价
+通过混淆竞价，每次出价（加密）可以看到（转账金额），但不是真的出价，最后可以退回。
+真出价会在最后生效，并且在竞拍结束后，有个揭晓期，最终完成盲拍。
 
+pragma solidity ^0.4.0
+
+contract BlindAuction {
+    
+    //出价数据结构
+    struct Bid{
+       bytes32 blindedBid;    //加密后出价的‘真伪’
+       uint deposit;          //出价时所付的金额
+    }
+    
+    address public beneficiary;
+    
+    uint public biddingEnd;
+    //揭晓期结束的时间
+    uint public revealEnd;
+    
+    bool public ended;
+    
+    //出价者的屡次出价映射
+    mapping(address => Bid[]) public bids;
+    
+    address public highestBidder;  //当前最高出价者
+    uint public highestBid;        //当前最高出价
+    
+    //退回钱款
+    mapping(address => uint) pendingReturns;
+    
+    event AuctionEnded(address winner, uint highestBid);
+    
+    //函数修改器，来限制函数执行时间
+    modifier onlyBefore(uint _time) { require(now < _time); _; }
+    modifier onlyAfter(uint _time) { require(now > _time); _; }
+    
+    //竞拍时间，揭露时间，受益人地址
+    function BlindAuction(uint _biddingTime, uint _revealTime, address _beneficiary) public {
+        beneficiary = _beneficiary;
+        biddingTime = now + _biddingTime;
+        revealEnd = biddingEnd + revealTime;
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
