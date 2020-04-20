@@ -1,1 +1,76 @@
+pragma solidity ^0.40
 
+contract SimpleAuction {
+  //最终受益者
+  address public beneficiary;
+  //拍卖结束时间戳
+  uint pubilc auctionEnd;
+  //出价最高者
+  address public hightestBidder;
+  //最高价格
+  uint public highestBid;
+  
+  //退回竞价
+  mapping(address => uint) PendingReturns;
+  
+  //竞拍结束标志
+  bool ended;
+  
+  //出现更高价格时引发的事件（Event）
+  event HightestBidIncreased(address bidder, uint amount);
+  
+  //竞拍结束时引发的事件
+  event AuctionEnded(address winner, uint amount);
+  
+  //初始化竞拍合约，指定即竞拍时间和受益者
+  function SimpleAuction(uint _biddingTime, address _beneficiary){
+      beneficiary = _beneficiary;
+      auctionEnd = now + _biddingTime；
+  }
+  
+  function bid() payable{
+      require(now <= auctionEnd);
+      require(msg.value > highestBid);
+      
+      if(highestBidder !=0){
+        pendingReturns[highestBidder] += highestBid;
+      }
+      
+      highestBidder = msg.sender;
+      highestBid = msg.value;
+      HighestBidIncreased(msg.sender, msg.value);
+   
+   }
+   
+   //出价被超过后竞拍者可以执行撤销
+   function withdraw() returns (bool) {
+      uint amount = pendingReturns[msg.sender];
+      if (amount > 0) {
+          pendingReturns[msg.sender] = 0;
+          if (!msg.sender.send(amount)) {
+              pendingReturns[msg.sender] = amount;
+              return false;
+          }
+       }
+       return true;
+    }
+    
+    
+    //竞拍结束执行后，将最高价支付给受益者
+    function auctionEnd() {
+        require(now >= auctionEnd);
+        require(!=ended);
+        
+        ended = true;
+        AuctionEnded(highestBidder, highestBid);
+        
+        beneficiary.transfer(highestBid);
+     }
+     
+  }   
+    
+    
+    
+    
+
+  
