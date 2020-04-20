@@ -48,11 +48,91 @@ contract Ballot{
     Voters[voter].weight = 1;
   }
      
-  //代理投票
+   //进行投票
+   function vote(uint Proposal){
+    require(Proposal < Proposal.length);
+    
+    Voter storage sender = Voters[msg.sender];
+    require((!sender.voted) && (sender.weight != 0));
+    sender.voted = true;
+    sender.vote = proposal;
+    
+    //统计票数
+    proposals[proposal].voteCount += sender.weight;
+    }
+     
+   
+     
+  //代理投票，投票者将自己投票机会授权另外一个地址
   function Delegate(address to) {
-    Voter
   
+    Voter storage sender = Voters[msg.sender];
+    require(!sender.voted);
+    require(to != msg.sender);
+    
+    while(Voters[to].delegate != address(0)){
+      to = Voters[to].delegate;
+      require(to != msg.sender);
+     }
+     
+     sender.voted = true;
+     sender.delegate = to;
+     Voter storage delegate = Voters[to];
+     if(delegate.voted){
+      Proposals[delegate.vote].voteCount += sender.weight;
+     } else{        
+        delegate.weight += sender.weight;
+       }
+       
+     }
+     
   
+  function WinningProposal() constant returns(uint[] winningProsals){
+    uint[] memory temWinner = new uint[](Proposals.length);
+    uint winningCount = 0;
+    uint winningVoteCount = 0;
+    
+    for(uint p = 0;p < Proposals.length;p++){
+      if(Proposals[p].voteCount > winningVoteCount){
+        winningVoteCount = Proposals[p].voteCount;
+        
+        temWinner[0] = p;
+        winningCount = 1;
+        } else if(Proposals[p].voteCount == winningVoteCount){
+            temWinner[winningCount] = p;
+            winningCount ++;
+          }
+     }
+     
+     winnerProposals = new uint[](winningCount);
+     
+     for(uint q = 0;q < winningCount;q++){
+        winningProposals[q] = temWinner[q];
+     }
+     
+     return winningProposals;
+     
+    }
+    
+    
+    funtion WinnerName() constant returns(bytes32[] winnerName){
+      uint[] memory winningProposals = winningProposal();
+      winnerNames = new bytes32[](winningProposals.length);
+      
+      for(uint p = 0;p < winningProposals.length;p++){
+        winnerNames[p] = proposals[winningProposals[p]].name;
+      }
+      
+      return winnerName;
+      }
+      
+      
+    }
+      
+      
+    
+    
+        
   
   
   
