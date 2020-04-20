@@ -57,13 +57,17 @@ contract SimpleAuction {
     
     
     //竞拍结束执行后，将最高价支付给受益者
+    //与其他合约进行交互最好遵循以下三步骤
     function auctionEnd() {
+        //1.检查状态
         require(now >= auctionEnd);
         require(!=ended);
         
+        //2.修改状态
         ended = true;
         AuctionEnded(highestBidder, highestBid);
         
+        //3.合约交互
         beneficiary.transfer(highestBid);
      }
      
