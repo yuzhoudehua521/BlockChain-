@@ -114,16 +114,16 @@ contract Ballot{
      
     }
     
-    
-    funtion WinnerName() constant returns(bytes32[] winnerName){
-      uint[] memory winningProposals = winningProposal();
+    //获取票数最多提案的名称，调用了winningProposal（）函数
+    funtion WinnerName() constant returns(bytes32[] winnerNames){
+      uint[] memory winningProposals = WinningProposal();
       winnerNames = new bytes32[](winningProposals.length);
       
       for(uint p = 0;p < winningProposals.length;p++){
-        winnerNames[p] = proposals[winningProposals[p]].name;
+        winnerNames[p] = Proposals[winningProposals[p]].name;
       }
       
-      return winnerName;
+      return winnerNames;
       }
       
       
