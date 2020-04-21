@@ -1,1 +1,69 @@
+pragma solidity ^0.4.0
 
+contract AccessControl{
+    
+    //合约中存储一个映射，对它的访问进行了权限控制
+    mapping (bytes32 => string) secretsMap;
+    
+    //管理员账户数组，可以添加管理员，可读（reader），可写（writer）
+    address[] admins;
+    address[] allowedReaders;
+    address[] allowedWriters;
+    
+    //构造函数，合约部署时指定一个初始管理账户数组
+    function AccesssControl(address[] initialAdmins){
+        admins = initialAdmins;
+    }
+        
+    
+    function isAllowed(address user, address[] allowedUsers) private returns(bool) {
+        for (uint i = 0;i < allowedUsers.length;i++) {
+            if(allowedUsers[i] == user){
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    
+    modifier onlyAllowedReaders(uint8 v, bytes32 r, bytes32 s) {
+        bytes32 hash = msg.sig;
+        address reader = ecrecover(hash, v, r, s);    //根据签名（v, r, s）和签名对象（hash）得到签名者的地址
+        require(isAllowed(reader, allowedReaders));
+        _;
+     }
+     
+     
+     modifier onlyAllowedWriters {
+        require(isAllowed(msg.sender, allowedWriters));
+        _;
+     }
+     
+     modifier onlyAdmins {
+        require(isAllowed(msg.sender, admins));
+        _;
+     }
+     
+     function read(uint8 v, bytes32 r, bytes32 s, bytes24 key) onlyAllowedReaders(v, r, s) constant returns(string) {
+        return secretsMap[key];
+     }
+     
+     
+     function addAuthorizedReader(address a) onlyAdrnins {
+        allowedReaders.push(a); 
+     }
+     
+     
+     function addAuthori zedWriter(address a) onlyAdrnins {
+        allowedWriters.push(a); 
+     }
+     
+     
+     function addAdrnin(address a) onlyAdrnins {
+        admins.push (a);
+     }
+     
+ }    
+     
+     
+     
