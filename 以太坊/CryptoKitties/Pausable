@@ -1,0 +1,45 @@
+/**
+ * @title Pausable
+ * @dev 允许紧急暂停协议的机制
+ */
+contract Pausable is Ownable {
+  event Pause();
+  event Unpause();
+
+  bool public paused = false;
+
+
+  /**
+   * @dev 在没有暂停时可以执行
+   */
+  modifier whenNotPaused() {
+    require(!paused);
+    _;
+  }
+
+  /**
+   * @dev 在暂停时可以执行
+   */
+  modifier whenPaused {
+    require(paused);
+    _;
+  }
+
+  /**
+   * @dev 主人可以开启暂定
+   */
+  function pause() onlyOwner whenNotPaused returns (bool) {
+    paused = true;
+    Pause();
+    return true;
+  }
+
+  /**
+   * @dev 主人可以取消暂停
+   */
+  function unpause() onlyOwner whenPaused returns (bool) {
+    paused = false;
+    Unpause();
+    return true;
+  }
+}
