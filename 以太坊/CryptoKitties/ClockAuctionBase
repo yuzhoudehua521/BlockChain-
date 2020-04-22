@@ -1,0 +1,194 @@
+/// @title Auction Core
+/// @dev 关于拍卖的模块、变量、内部方法
+/// @notice 我们实现了召回功能以规避错误的操作
+contract ClockAuctionBase {
+
+    // 对NFT的拍卖结构
+    struct Auction {
+        // 当前NFT的主人
+        address seller;
+        // 起始价格（wei）
+        uint128 startingPrice;
+        // 结束价格（wei）
+        uint128 endingPrice;
+        // 时长（秒）
+        uint64 duration;
+        // 开始时间，0表示拍卖结束
+        uint64 startedAt;
+    }
+
+    // 对NFT协议的引用
+    ERC721 public nonFungibleContract;
+
+    // 交易所的税率，0-10,000表示0%-100%
+    uint256 public ownerCut;
+
+    // 从TokenID到拍卖的映射
+    mapping (uint256 => Auction) tokenIdToAuction;
+
+    event AuctionCreated(uint256 tokenId, uint256 startingPrice, uint256 endingPrice, uint256 duration);
+    event AuctionSuccessful(uint256 tokenId, uint256 totalPrice, address winner);
+    event AuctionCancelled(uint256 tokenId);
+
+    /// @dev 判断一个人是否拥有token
+    /// @param _claimant 用户地址
+    /// @param _tokenId - Token的ID
+    function _owns(address _claimant, uint256 _tokenId) internal view returns (bool) {
+        return (nonFungibleContract.ownerOf(_tokenId) == _claimant);
+    }
+
+    /// @dev 把NFT的token转给协议
+    /// Throws if the escrow fails.
+    /// @param _owner 当前的owner
+    /// @param _tokenId 转移的token的Id
+    function _escrow(address _owner, uint256 _tokenId) internal {
+        nonFungibleContract.transferFrom(_owner, this, _tokenId);
+    }
+
+    /// @dev 把协议的NFT转给另一个地址
+    /// 转移成功返回true
+    /// @param _receiver NFT的接收者
+    /// @param _tokenId 转移的Token的Id
+    function _transfer(address _receiver, uint256 _tokenId) internal {
+        nonFungibleContract.transfer(_receiver, _tokenId);
+    }
+
+    /// @dev 增加一个公开拍卖，同时发出AuctionCreated事件
+    /// @param _tokenId 参加拍卖的Token的Id
+    /// @param _auction 添加的拍卖
+    function _addAuction(uint256 _tokenId, Auction _auction) internal {
+        // 要求至少还有1分钟的时长
+        require(_auction.duration >= 1 minutes);
+
+        tokenIdToAuction[_tokenId] = _auction;
+
+        AuctionCreated(
+            uint256(_tokenId),
+            uint256(_auction.startingPrice),
+            uint256(_auction.endingPrice),
+            uint256(_auction.duration)
+        );
+    }
+
+    /// @dev 无条件取消一个拍卖
+    function _cancelAuction(uint256 _tokenId, address _seller) internal {
+        _removeAuction(_tokenId);
+        _transfer(_seller, _tokenId);
+        AuctionCancelled(_tokenId);
+    }
+
+    /// @dev Computes the price and transfers winnings.
+    /// Does NOT transfer ownership of token.
+    function _bid(uint256 _tokenId, uint256 _bidAmount)
+        internal
+        returns (uint256)
+    {
+        // 获得拍卖的数据
+        Auction storage auction = tokenIdToAuction[_tokenId];
+
+        // 判断拍卖是否有效
+        // 因为以太坊的map失效的返回是全0的object，因此我们需要进一步的判断
+        require(_isOnAuction(auction));
+
+        // 判断出价是否高于定价
+        uint256 price = _currentPrice(auction);
+        require(_bidAmount >= price);
+
+        // 在删除拍卖前预存卖家的地址
+        address seller = auction.seller;
+
+        // 转账前先删除拍卖以规避风险
+        _removeAuction(_tokenId);
+
+        // 转账
+        if (price > 0) {
+            // 计算拍卖所的税
+            // 注意：_computeCut()会保证value <= price
+            uint256 auctioneerCut = _computeCut(price);
+            uint256 sellerProceeds = price - auctioneerCut;
+
+            // 在复杂的操作中包含transfer()是有风险的
+            // 我们通过提前删除Auction来规避
+            seller.transfer(sellerProceeds);
+        }
+
+        // 计算多付的货币，如果足够多，则转回支付者
+        uint256 bidExcess = _bidAmount - price;
+
+        // 退钱
+        msg.sender.transfer(bidExcess);
+
+        // 告诉世界～
+        AuctionSuccessful(_tokenId, price, msg.sender);
+
+        return price;
+    }
+
+    /// @dev 移除一个token的拍卖
+    /// @param _tokenId 拍卖的token的Id
+    function _removeAuction(uint256 _tokenId) internal {
+        delete tokenIdToAuction[_tokenId];
+    }
+
+    /// @dev 判断一个拍卖是否有效
+    /// @param _auction 判断的拍卖
+    function _isOnAuction(Auction storage _auction) internal view returns (bool) {
+        return (_auction.startedAt > 0);
+    }
+
+    /// @dev 返回拍卖的价格
+    ///  这个只是计算时间，另一个函数计算价格，从而便于查错
+    function _currentPrice(Auction storage _auction)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 secondsPassed = 0;
+
+        // 规避负数
+        if (now > _auction.startedAt) {
+            secondsPassed = now - _auction.startedAt;
+        }
+
+        return _computeCurrentPrice(
+            _auction.startingPrice,
+            _auction.endingPrice,
+            _auction.duration,
+            secondsPassed
+        );
+    }
+
+    /// @dev 计算当前拍卖的价格
+    ///  可以通过把这个函数标记为public来进行单元测试
+    function _computeCurrentPrice(
+        uint256 _startingPrice,
+        uint256 _endingPrice,
+        uint256 _duration,
+        uint256 _secondsPassed
+    )
+        internal
+        pure
+        returns (uint256)
+    {
+        // 我们没有使用SafeMath，因为我们的设计规避了溢出风险
+        if (_secondsPassed >= _duration) {
+            // 已经超过了结束时间
+            return _endingPrice;
+        } else {
+            // 起始价格可以大于终止价格，因此可能为负数
+            int256 totalPriceChange = int256(_endingPrice) - int256(_startingPrice);
+
+            int256 currentPriceChange = totalPriceChange * int256(_secondsPassed) / int256(_duration);
+            int256 currentPrice = int256(_startingPrice) + currentPriceChange;
+
+            return uint256(currentPrice);
+        }
+    }
+
+    /// @dev 计算交易所的收入
+    /// @param _price NFT的价格
+    function _computeCut(uint256 _price) internal view returns (uint256) {
+        return _price * ownerCut / 10000;
+    }
+
+}
