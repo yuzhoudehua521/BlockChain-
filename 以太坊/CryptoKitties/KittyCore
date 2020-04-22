@@ -1,0 +1,105 @@
+/// @title 迷恋猫：在以太坊收集和繁衍迷恋猫
+/// @author Axiom Zen (https://www.axiomzen.co)
+/// @dev 主协议，管理整个猫王国
+contract KittyCore is KittyMinting {
+
+    // 这是迷恋猫的主协议，为了把代码解耦，我们用了两个方法：
+    // 1. 拍卖协议和基因协议被独立出来，从而方便我们查错和升级
+    // 2. 主协议由一条继承链构成，让每一个协议专心负责自己的逻辑，而不会过于复杂
+    //      - KittyBase：定义了最基础的功能，包括数据存储、常量、类型、内部管理函数
+    //      - KittyAccessControl：设置了CEO、CFO、COO的权限和对应的能力
+    //      - KittyOwnership：提供了遵循ERC-721交易NFT的方法
+    //        协议地址：https://github.com/ethereum/EIPs/issues/721
+    //      - KittyBreeding: 管理交配和生育功能，通过外部基因协议来创建新的小猫
+    //      - KittyAuctions：通过两个外部协议管理了交配拍卖和销售拍卖
+    //      - KittyMinting：创建0代猫的协议
+    // 升级协议时使用
+    address public newContractAddress;
+
+    /// @notice 创建CryptoKitties智能协议实例
+    function KittyCore() public {
+        // 暂停
+        paused = true;
+
+        // 创建CEO
+        ceoAddress = msg.sender;
+
+        // 创建COO
+        cooAddress = msg.sender;
+
+        // 出现0号猫
+        _createKitty(0, 0, 0, uint256(-1), address(0));
+    }
+
+    /// @dev 标记协议是否升级
+    ///   升级时会发出通知，并且老版本会被暂停
+    /// @param _v2Address 新的协议地址
+    function setNewAddress(address _v2Address) external onlyCEO whenPaused {
+        newContractAddress = _v2Address;
+        ContractUpgrade(_v2Address);
+    }
+
+    /// @notice 没有消费
+    /// @dev 拒绝非拍卖税的其他收入
+    function() external payable {
+        require(
+            msg.sender == address(saleAuction) ||
+            msg.sender == address(siringAuction)
+        );
+    }
+
+    /// @notice 返回一只猫的信息
+    /// @param _id 猫的Id
+    function getKitty(uint256 _id)
+        external
+        view
+        returns (
+        bool isGestating,
+        bool isReady,
+        uint256 cooldownIndex,
+        uint256 nextActionAt,
+        uint256 siringWithId,
+        uint256 birthTime,
+        uint256 matronId,
+        uint256 sireId,
+        uint256 generation,
+        uint256 genes
+    ) {
+        Kitty storage kit = kitties[_id];
+
+        // 0表示不在孕育
+        isGestating = (kit.siringWithId != 0);
+        isReady = (kit.cooldownEndBlock <= block.number);
+        cooldownIndex = uint256(kit.cooldownIndex);
+        nextActionAt = uint256(kit.cooldownEndBlock);
+        siringWithId = uint256(kit.siringWithId);
+        birthTime = uint256(kit.birthTime);
+        matronId = uint256(kit.matronId);
+        sireId = uint256(kit.sireId);
+        generation = uint256(kit.generation);
+        genes = kit.genes;
+    }
+
+    /// @dev 首先判断拍卖地址、基因地址是否有效，并且没有升级，才可能回复协议
+    /// @notice public能够通过super.unpause节省gas
+    function unpause() public onlyCEO whenPaused {
+        require(saleAuction != address(0));
+        require(siringAuction != address(0));
+        require(geneScience != address(0));
+        require(newContractAddress == address(0));
+
+        // Actually unpause the contract.
+        super.unpause();
+    }
+
+    // @dev 允许CFO取钱
+    function withdrawBalance() external onlyCFO {
+        uint256 balance = this.balance;
+        // 预留生育费
+        uint256 subtractFees = (pregnantKitties + 1) * autoBirthFee;
+
+        if (balance > subtractFees) {
+            cfoAddress.send(balance - subtractFees);
+        }
+    }
+}
