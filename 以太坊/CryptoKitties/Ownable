@@ -1,0 +1,36 @@
+/**
+ * @title Ownable
+ * @dev 提供关于主人的基本权限认证
+ */
+contract Ownable {
+  address public owner;
+
+
+  /**
+   * @dev 把主人设置为发起者
+   */
+  function Ownable() {
+    owner = msg.sender;
+  }
+
+
+  /**
+   * @dev 要求发起者是主人
+   */
+  modifier onlyOwner() {
+    require(msg.sender == owner);
+    _;
+  }
+
+
+  /**
+   * @dev 允许当前的主人转换新的主人
+   * @param 新主人的地址
+   */
+  function transferOwnership(address newOwner) onlyOwner {
+    if (newOwner != address(0)) {
+      owner = newOwner;
+    }
+  }
+
+}
