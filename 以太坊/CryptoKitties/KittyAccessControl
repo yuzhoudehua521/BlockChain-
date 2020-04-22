@@ -73,25 +73,25 @@ contract KittyAccessControl {
     }
 
 
-    /// @dev 提供没有被暂定的状态检查
+    /// 提供没有被暂定的状态检查
     modifier whenNotPaused() {
         require(!paused);
         _;
     }
 
-    /// @dev 提供被暂定的状态检查
+    /// 提供被暂定的状态检查
     modifier whenPaused {
         require(paused);
         _;
     }
 
-    /// @dev "C-level"能够启动暂定操作，用以应对潜在的bug和缺陷，以降低损失
+    /// 三个管理者能够启动暂定操作，用以应对潜在的bug和缺陷，以降低损失
     function pause() external onlyCLevel whenNotPaused {
         paused = true;
     }
 
-    /// @dev 只有CEO能够取消暂停状态，用来规避当CFO或COO被攻破的情况
-    /// @notice 把功能设置为public，可以让衍生的协议也能发起操作
+    /// 只有CEO能够取消暂停状态，用来规避当CFO或COO被攻破的情况
+    /// 把功能设置为public，可以让衍生的协议也能发起操作
     function unpause() public onlyCEO whenPaused {
         // 协议升级后是无法取消暂定的
         paused = false;
