@@ -1,0 +1,99 @@
+contract KittyAccessControl {
+    // CryptoKitties的核心角色的权限管理
+    //     - CEO：能够调整其他角色和修改协议地址，唯一能够重启协议；
+    //       初始值是KittyCore的创建者
+    //     - The CFO：能够从KittyCore和拍卖协议中取资金
+    //     - The COO：能够生成和拍卖0代猫
+    //
+    // 这些角色是按照职能划分的，每个角色仅有以上能力。
+    // 特别是CEO能够指派每一个角色的地址，但他不能履行这些角色的能力。
+    // 这能够限制我们让CEO成为一个“超级用户”，从而增加了安全性。
+    
+    // 协议升级时的事件
+    event ContractUpgrade(address newContract);
+
+    // 执行每个角色的协议地址
+    address public ceoAddress;
+    address public cfoAddress;
+    address public cooAddress;
+
+    // 管理协议是否被暂定，暂停时大多数行动都会被阻塞
+    bool public paused = false;
+
+    ///提供只有CEO能够使用的功能的权限检查
+    modifier onlyCEO() {
+        require(msg.sender == ceoAddress);
+        _;
+    }
+
+    ///提供只有CFO能够使用的功能的权限检查
+    modifier onlyCFO() {
+        require(msg.sender == cfoAddress);
+        _;
+    }
+
+    ///提供只有COO能够使用的功能的权限检查
+    modifier onlyCOO() {
+        require(msg.sender == cooAddress);
+        _;
+    }
+
+    /// 提供只有三个管理者能够使用的功能的权限检查    
+    modifier onlyCLevel() {
+        require(
+            msg.sender == cooAddress ||
+            msg.sender == ceoAddress ||
+            msg.sender == cfoAddress
+        );
+        _;
+    }
+
+    /// 让当前CEO指派一名新的CEO
+    ///  _newCEO 新的CEO的地址
+    function setCEO(address _newCEO) external onlyCEO {
+        require(_newCEO != address(0));
+
+        ceoAddress = _newCEO;
+    }
+
+    /// 让CEO指派一名新的CFO
+    /// _newCFO 新的CFO的地址
+    function setCFO(address _newCFO) external onlyCEO {
+        require(_newCFO != address(0));
+
+        cfoAddress = _newCFO;
+    }
+
+    /// 让CEO指派一名新的COO
+    /// _newCOO 新的COO的地址
+    function setCOO(address _newCOO) external onlyCEO {
+        require(_newCOO != address(0));
+
+        cooAddress = _newCOO;
+    }
+
+
+    /// @dev 提供没有被暂定的状态检查
+    modifier whenNotPaused() {
+        require(!paused);
+        _;
+    }
+
+    /// @dev 提供被暂定的状态检查
+    modifier whenPaused {
+        require(paused);
+        _;
+    }
+
+    /// @dev "C-level"能够启动暂定操作，用以应对潜在的bug和缺陷，以降低损失
+    function pause() external onlyCLevel whenNotPaused {
+        paused = true;
+    }
+
+    /// @dev 只有CEO能够取消暂停状态，用来规避当CFO或COO被攻破的情况
+    /// @notice 把功能设置为public，可以让衍生的协议也能发起操作
+    function unpause() public onlyCEO whenPaused {
+        // 协议升级后是无法取消暂定的
+        paused = false;
+    }
+}
