@@ -1,0 +1,74 @@
+/// @title 销售拍卖
+/// @notice 我们实现了召回功能以规避错误的操作
+contract SaleClockAuction is ClockAuction {
+
+    // @dev 提供验证我们是销售拍卖的服务setSaleAuctionAddress()
+    bool public isSaleClockAuction = true;
+
+    // 记录最近5次0代猫的价格
+    uint256 public gen0SaleCount;
+    uint256[5] public lastGen0SalePrices;
+
+    // 构造函数
+    function SaleClockAuction(address _nftAddr, uint256 _cut) public
+        ClockAuction(_nftAddr, _cut) {}
+
+    /// @dev 创建一个拍卖
+    /// @param _tokenId 拍卖的token的Id
+    /// @param _startingPrice 起始价格
+    /// @param _endingPrice 终止价格
+    /// @param _duration 拍卖时长（秒）
+    /// @param _seller 卖家
+    function createAuction(
+        uint256 _tokenId,
+        uint256 _startingPrice,
+        uint256 _endingPrice,
+        uint256 _duration,
+        address _seller
+    )
+        external
+    {
+        // 溢出检查
+        require(_startingPrice == uint256(uint128(_startingPrice)));
+        require(_endingPrice == uint256(uint128(_endingPrice)));
+        require(_duration == uint256(uint64(_duration)));
+
+        require(msg.sender == address(nonFungibleContract));
+        _escrow(_seller, _tokenId);
+        Auction memory auction = Auction(
+            _seller,
+            uint128(_startingPrice),
+            uint128(_endingPrice),
+            uint64(_duration),
+            uint64(now)
+        );
+        _addAuction(_tokenId, auction);
+    }
+
+    /// @dev 如果卖家是NFT协议者，调整0代猫的价格记录
+    function bid(uint256 _tokenId)
+        external
+        payable
+    {
+        // 验证token的ID
+        address seller = tokenIdToAuction[_tokenId].seller;
+        uint256 price = _bid(_tokenId, msg.value);
+        _transfer(msg.sender, _tokenId);
+
+        // 处理0代猫
+        if (seller == address(nonFungibleContract)) {
+            // 调整价格
+            lastGen0SalePrices[gen0SaleCount % 5] = price;
+            gen0SaleCount++;
+        }
+    }
+
+    function averageGen0SalePrice() external view returns (uint256) {
+        uint256 sum = 0;
+        for (uint256 i = 0; i < 5; i++) {
+            sum += lastGen0SalePrices[i];
+        }
+        return sum / 5;
+    }
+
+}
