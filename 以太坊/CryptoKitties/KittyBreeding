@@ -1,0 +1,300 @@
+/// @title 管理猫的交配、怀孕、出生
+/// @author Axiom Zen (https://www.axiomzen.co)
+/// @dev 查看KittyCore来了解协议之间的关系
+contract KittyBreeding is KittyOwnership {
+
+    /// @dev 当两只猫成功交配，母亲怀孕期设定后，发出Pregnant事件
+    event Pregnant(address owner, uint256 matronId, uint256 sireId, uint256 cooldownEndBlock);
+
+    /// @notice 交配方式breedWithAuto()的最小付款额
+    ///  这是giveBirth()调用者支付的gas，可以由COO随时调整
+    uint256 public autoBirthFee = 2 finney;
+
+    // 记录多少只怀孕的猫
+    uint256 public pregnantKitties;
+
+    /// @dev 实现基因算法的协议
+    GeneScienceInterface public geneScience;
+
+    /// @dev 升级基因算法的地址，只能CEO调用
+    /// @param _address 新的GeneScience协议实例的地址
+    function setGeneScienceAddress(address _address) external onlyCEO {
+        GeneScienceInterface candidateContract = GeneScienceInterface(_address);
+
+        // NOTE: 确认协议是否符合标准 - https://github.com/Lunyr/crowdsale-contracts/blob/cfadd15986c30521d8ba7d5b6f57b4fefcc7ac38/contracts/LunyrToken.sol#L117
+        require(candidateContract.isGeneScience());
+
+        // Set the new contract address
+        geneScience = candidateContract;
+    }
+
+    /// @dev 检查一只猫能否生育，需要判断不在修养期，并且不在生育前
+    function _isReadyToBreed(Kitty _kit) internal view returns (bool) {
+        // 除了检查cooldownEndBlock的修养期，还要检查是否在等待出生
+        return (_kit.siringWithId == 0) && (_kit.cooldownEndBlock <= uint64(block.number));
+    }
+
+    /// @dev 判断雄性是否被授权与雌性交配
+    ///  条件是：是否是同一个主人，或者被授权 approveSiring()
+    function _isSiringPermitted(uint256 _sireId, uint256 _matronId) internal view returns (bool) {
+        address matronOwner = kittyIndexToOwner[_matronId];
+        address sireOwner = kittyIndexToOwner[_sireId];
+
+        // 是否是同一个主人，或者被授权
+        return (matronOwner == sireOwner || sireAllowedToAddress[_sireId] == matronOwner);
+    }
+
+    /// @dev 基于修养指数cooldownIndex，设置修养时间cooldownEndTime
+    ///  同时调整修养指数
+    /// @param _kitten 需要调整的猫的状态
+    function _triggerCooldown(Kitty storage _kitten) internal {
+        // 基于cooldownIndex和secondsPerBlock，判断结束时的区块
+        _kitten.cooldownEndBlock = uint64((cooldowns[_kitten.cooldownIndex]/secondsPerBlock) + block.number);
+
+        // 增加修养指数，最大到13
+        // 我们可以动态检查cooldowns的大小，但是硬编码来节省gas
+        if (_kitten.cooldownIndex < 13) {
+            _kitten.cooldownIndex += 1;
+        }
+    }
+
+    /// @notice 允许另一个用户和你的猫交配
+    /// @param _addr 另一个用户的地址，设置为0来清楚授权
+    /// @param _sireId 你自己可以被交配的猫的地址
+    function approveSiring(address _addr, uint256 _sireId)
+        external
+        whenNotPaused
+    {
+        require(_owns(msg.sender, _sireId));
+        sireAllowedToAddress[_sireId] = _addr;
+    }
+
+    /// @dev 修改调用giveBirthAuto()的付费，只能COO调用
+    ///  提供生育猫所必须的gas
+    function setAutoBirthFee(uint256 val) external onlyCOO {
+        autoBirthFee = val;
+    }
+
+    /// @dev 判断一个猫是否可以产出小猫
+    function _isReadyToGiveBirth(Kitty _matron) private view returns (bool) {
+        return (_matron.siringWithId != 0) && (_matron.cooldownEndBlock <= uint64(block.number));
+    }
+
+    /// @notice 判断一只猫能否交配
+    /// @param _kittyId 猫的ID
+    function isReadyToBreed(uint256 _kittyId)
+        public
+        view
+        returns (bool)
+    {
+        require(_kittyId > 0);
+        Kitty storage kit = kitties[_kittyId];
+        return _isReadyToBreed(kit);
+    }
+
+    /// @dev 判断一只猫是否怀孕
+    /// @param _kittyId 猫的ID
+    function isPregnant(uint256 _kittyId)
+        public
+        view
+        returns (bool)
+    {
+        require(_kittyId > 0);
+        // 只有siringWithId被设置，才是怀孕中
+        return kitties[_kittyId].siringWithId != 0;
+    }
+
+    /// @dev 检查能否符合伦理的交配，并不检查所有权
+    /// @param _matron 潜在的母亲
+    /// @param _matronId 目前的ID
+    /// @param _sire A 潜在的父亲
+    /// @param _sireId 父亲的ID
+    function _isValidMatingPair(
+        Kitty storage _matron,
+        uint256 _matronId,
+        Kitty storage _sire,
+        uint256 _sireId
+    )
+        private
+        view
+        returns(bool)
+    {
+        // 不能和自己交配
+        if (_matronId == _sireId) {
+            return false;
+        }
+
+        // 不能和父母交配
+        if (_matron.matronId == _sireId || _matron.sireId == _sireId) {
+            return false;
+        }
+        if (_sire.matronId == _matronId || _sire.sireId == _matronId) {
+            return false;
+        }
+
+        // 特殊处理0代猫
+        if (_sire.matronId == 0 || _matron.matronId == 0) {
+            return true;
+        }
+
+        // 不能和兄妹交配
+        if (_sire.matronId == _matron.matronId || _sire.matronId == _matron.sireId) {
+            return false;
+        }
+        if (_sire.sireId == _matron.matronId || _sire.sireId == _matron.sireId) {
+            return false;
+        }
+
+        // 一切正常
+        return true;
+    }
+
+    /// @dev 内部检查是否能够通过拍卖支持交配服务
+    function _canBreedWithViaAuction(uint256 _matronId, uint256 _sireId)
+        internal
+        view
+        returns (bool)
+    {
+        Kitty storage matron = kitties[_matronId];
+        Kitty storage sire = kitties[_sireId];
+        return _isValidMatingPair(matron, _matronId, sire, _sireId);
+    }
+
+    /// @notice 检查两只猫能否生育，包括所有权和授予权
+    ///  并不检查猫是否可以生育
+    /// @param _matronId 潜在母亲的ID
+    /// @param _sireId 潜在父亲的ID
+    function canBreedWith(uint256 _matronId, uint256 _sireId)
+        external
+        view
+        returns(bool)
+    {
+        require(_matronId > 0);
+        require(_sireId > 0);
+        Kitty storage matron = kitties[_matronId];
+        Kitty storage sire = kitties[_sireId];
+        return _isValidMatingPair(matron, _matronId, sire, _sireId) &&
+            _isSiringPermitted(_sireId, _matronId);
+    }
+
+    /// @dev 在所有检查通过后，内部发起生育的函数
+    function _breedWith(uint256 _matronId, uint256 _sireId) internal {
+        // Grab a reference to the Kitties from storage.
+        Kitty storage sire = kitties[_sireId];
+        Kitty storage matron = kitties[_matronId];
+
+        // 标记母亲怀孕，以及父亲的ID
+        matron.siringWithId = uint32(_sireId);
+
+        // 设置修养期.
+        _triggerCooldown(sire);
+        _triggerCooldown(matron);
+
+        // 清除交配的授权
+        // but it's likely to avoid confusion!
+        delete sireAllowedToAddress[_matronId];
+        delete sireAllowedToAddress[_sireId];
+
+        // 增加怀孕的猫的数量
+        pregnantKitties++;
+
+        // 发出Pregnant事件
+        Pregnant(kittyIndexToOwner[_matronId], _matronId, _sireId, matron.cooldownEndBlock);
+    }
+
+    /// @notice 用你的猫作为母亲与你的猫或者你被授权的猫交配
+    ///  或者会成功，或者会彻底失败，需要giveBirth()的调用者预付gas
+    /// @param _matronId 母亲的ID
+    /// @param _sireId 父亲的ID
+    function breedWithAuto(uint256 _matronId, uint256 _sireId)
+        external
+        payable
+        whenNotPaused
+    {
+        // 检查费用
+        require(msg.value >= autoBirthFee);
+
+        // 调用者需要拥有母亲
+        require(_owns(msg.sender, _matronId));
+
+        // 怀孕中的父母不能再次参与交配服务的拍卖，但我们也不需要明确的检查
+        // 因为拍卖时的主人是拍卖房
+        // 因此我们不需要浪费gas来做检查
+
+        // 检查是否是同一个主人，或者被授权
+        require(_isSiringPermitted(_sireId, _matronId));
+
+        // 获得潜在的母亲的数据
+        Kitty storage matron = kitties[_matronId];
+
+        // 确认母亲可以交配
+        require(_isReadyToBreed(matron));
+
+        // 获得潜在的父亲的数据
+        Kitty storage sire = kitties[_sireId];
+
+        // 确认父亲可以交配
+        require(_isReadyToBreed(sire));
+
+        // 确认符合伦理
+        require(_isValidMatingPair(
+            matron,
+            _matronId,
+            sire,
+            _sireId
+        ));
+
+        // 开始生育
+        _breedWith(_matronId, _sireId);
+    }
+
+    /// @notice 生出一个小猫
+    /// @param _matronId 母亲的ID
+    /// @return 新的小猫的ID
+    /// @dev 检查哦母亲是否可以生出小猫
+    ///  计算小猫的基因，并且把小猫给予母亲的主人
+    ///  任何人都可以调用生育，但是需要支付gas，尽管小猫只是归属母亲的主人
+    function giveBirth(uint256 _matronId)
+        external
+        whenNotPaused
+        returns(uint256)
+    {
+        // 获得母亲的数据
+        Kitty storage matron = kitties[_matronId];
+
+        // 检查母亲数据是否有效
+        require(matron.birthTime != 0);
+
+        // 检查母亲是否可以生出小猫
+        require(_isReadyToGiveBirth(matron));
+
+        // 获得父亲的数据
+        uint256 sireId = matron.siringWithId;
+        Kitty storage sire = kitties[sireId];
+
+        // 确认父母中最大的代
+        uint16 parentGen = matron.generation;
+        if (sire.generation > matron.generation) {
+            parentGen = sire.generation;
+        }
+
+        // 生成小猫的基因
+        uint256 childGenes = geneScience.mixGenes(matron.genes, sire.genes, matron.cooldownEndBlock - 1);
+
+        // 生成新的小猫
+        address owner = kittyIndexToOwner[_matronId];
+        uint256 kittenId = _createKitty(_matronId, matron.siringWithId, parentGen + 1, childGenes, owner);
+
+        // 清除怀孕中父亲的ID，从而标记能够交配
+        delete matron.siringWithId;
+
+        // 减少怀孕中猫的数量
+        pregnantKitties--;
+
+        // 把费用发给对应的地址
+        msg.sender.send(autoBirthFee);
+
+        // 返回小猫的ID
+        return kittenId;
+    }
+}
