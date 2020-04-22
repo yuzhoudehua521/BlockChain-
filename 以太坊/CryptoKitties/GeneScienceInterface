@@ -1,0 +1,37 @@
+//python
+//双亲的基因基于75%的概率进行轮转，从而有可能让隐性性状便成了显性性状
+//当双亲的基因相差1的时候，有一定概率会进行变异，产生新的性状
+//如果没有发生变异，各有50%的概率从双亲继承一段基因
+
+def mixGenes(mGenes[48], sGenes[48], babyGenes[48]):
+  # PARENT GENE SWAPPING
+  for (i = 0; i < 12; i++):
+    index = 4 * i
+    for (j = 3; j > 0; j--):
+      if random() < 0.25:
+        swap(mGenes, index+j, index+j-1)
+      if random() < 0.25:
+        swap(sGenes, index+j, index+j-1)
+  # BABY GENES
+  for (i = 0; i < 48; i++):
+    mutation = 0
+    # CHECK MUTATION
+    if i % 4 == 0:
+      gene1 = mGene[i]
+      gene2 = sGene[i]
+      if gene1 > gene2:
+        gene1, gene2 = gene2, gene1
+      if (gene2 - gene1) == 1 and iseven(gene1):
+        probability = 0.25
+        if gene1 > 23:
+          probability /= 2
+        if random() < probability:
+          mutation = (gene1 / 2) + 16
+    # GIVE BABY GENES
+    if mutation:
+      baby[i] = mutation
+    else:
+      if random() < 0.5:
+        babyGenes[i] = mGene[i]
+      else:
+        babyGenes[i] = sGene[i]
