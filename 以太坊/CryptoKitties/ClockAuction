@@ -1,0 +1,142 @@
+/// @title 针对NFT的计时拍卖
+/// @notice 我们实现了召回功能以规避错误的操作
+contract ClockAuction is Pausable, ClockAuctionBase {
+
+    /// @dev ERC-165用于ERC-721的接口签名
+    ///  参考资料：https://github.com/ethereum/EIPs/issues/165
+    ///  参考资料：https://github.com/ethereum/EIPs/issues/721
+    bytes4 constant InterfaceSignature_ERC721 = bytes4(0x9a20483d);
+
+    /// @dev 对接NFT协议，并且验证交易税合规
+    /// @param _nftAddress 实现了Nonfungible接口的协议地址
+    /// @param _cut 交易税
+    function ClockAuction(address _nftAddress, uint256 _cut) public {
+        require(_cut <= 10000);
+        ownerCut = _cut;
+
+        ERC721 candidateContract = ERC721(_nftAddress);
+        require(candidateContract.supportsInterface(InterfaceSignature_ERC721));
+        nonFungibleContract = candidateContract;
+    }
+
+    /// @dev 转移所有的以太币到NFT的协议地址，可以被NFT的地址或者本地址调用
+    function withdrawBalance() external {
+        address nftAddress = address(nonFungibleContract);
+
+        require(
+            msg.sender == owner ||
+            msg.sender == nftAddress
+        );
+        // 使用boolean，从而在错误情况下依然能够正常运行
+        bool res = nftAddress.send(this.balance);
+    }
+
+    /// @dev 创建一个拍卖
+    /// @param _tokenId 拍卖的token的Id
+    /// @param _startingPrice 起始价格
+    /// @param _endingPrice 终止价格
+    /// @param _duration 拍卖时长（秒）
+    /// @param _seller 卖家
+    function createAuction(
+        uint256 _tokenId,
+        uint256 _startingPrice,
+        uint256 _endingPrice,
+        uint256 _duration,
+        address _seller
+    )
+        external
+        whenNotPaused
+    {
+        // 判断不会发生溢出
+        require(_startingPrice == uint256(uint128(_startingPrice)));
+        require(_endingPrice == uint256(uint128(_endingPrice)));
+        require(_duration == uint256(uint64(_duration)));
+
+        require(_owns(msg.sender, _tokenId));
+        _escrow(msg.sender, _tokenId);
+        Auction memory auction = Auction(
+            _seller,
+            uint128(_startingPrice),
+            uint128(_endingPrice),
+            uint64(_duration),
+            uint64(now)
+        );
+        _addAuction(_tokenId, auction);
+    }
+
+    /// @dev 出价，如果出价足够，进行token的转移
+    /// @param _tokenId 出价的token
+    function bid(uint256 _tokenId)
+        external
+        payable
+        whenNotPaused
+    {
+        // 失败会抛出
+        _bid(_tokenId, msg.value);
+        _transfer(msg.sender, _tokenId);
+    }
+
+    /// @dev 取消一个没有结束的拍卖
+    ///  把NFT退回给原来的主人
+    /// @notice 当协议被暂停时，依然可以执行
+    /// @param _tokenId - 拍卖的token的Id
+    function cancelAuction(uint256 _tokenId)
+        external
+    {
+        Auction storage auction = tokenIdToAuction[_tokenId];
+        require(_isOnAuction(auction));
+        address seller = auction.seller;
+        require(msg.sender == seller);
+        _cancelAuction(_tokenId, seller);
+    }
+
+    /// @dev 当协议暂停时取消一个拍卖
+    ///  只有主人能够调用，尽在紧急情况下使用
+    /// @param _tokenId 要取消的token的Id
+    function cancelAuctionWhenPaused(uint256 _tokenId)
+        whenPaused
+        onlyOwner
+        external
+    {
+        Auction storage auction = tokenIdToAuction[_tokenId];
+        require(_isOnAuction(auction));
+        _cancelAuction(_tokenId, auction.seller);
+    }
+
+    /// @dev 获得一个token的Id的拍卖信息
+    /// @param _tokenId 拍卖的token的Id
+    function getAuction(uint256 _tokenId)
+        external
+        view
+        returns
+    (
+        address seller,
+        uint256 startingPrice,
+        uint256 endingPrice,
+        uint256 duration,
+        uint256 startedAt
+    ) {
+        Auction storage auction = tokenIdToAuction[_tokenId];
+        require(_isOnAuction(auction));
+        return (
+            auction.seller,
+            auction.startingPrice,
+            auction.endingPrice,
+            auction.duration,
+            auction.startedAt
+        );
+    }
+
+    /// @dev 返回一个拍卖当前的价格
+    /// @param _tokenId 查看的token的Id
+    function getCurrentPrice(uint256 _tokenId)
+        external
+        view
+        returns (uint256)
+    {
+        Auction storage auction = tokenIdToAuction[_tokenId];
+        require(_isOnAuction(auction));
+        return _currentPrice(auction);
+    }
+
+}
