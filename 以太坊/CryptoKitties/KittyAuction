@@ -1,0 +1,117 @@
+/// @title 处理销售拍卖和交配拍卖
+contract KittyAuction is KittyBreeding {
+
+    // @notice 拍卖协议中的变量在KittyBase中被定义，通过KittyOwnership来访问
+    //  从而让我们能够避免错误交易
+    //  销售拍卖用于0代猫和用户之间的交易
+    //  交配拍卖用于猫之间的交配
+
+    /// @dev 设置销售拍卖的地址
+    /// @param _address 销售拍卖的地址
+    function setSaleAuctionAddress(address _address) external onlyCEO {
+        SaleClockAuction candidateContract = SaleClockAuction(_address);
+
+        // 验证协议符合标准 https://github.com/Lunyr/crowdsale-contracts/blob/cfadd15986c30521d8ba7d5b6f57b4fefcc7ac38/contracts/LunyrToken.sol#L117
+        require(candidateContract.isSaleClockAuction());
+
+        // 设置销售拍卖协议地址
+        saleAuction = candidateContract;
+    }
+
+    /// @dev 设置交配拍卖的地址
+    /// @param _address 交配拍卖的地址
+    function setSiringAuctionAddress(address _address) external onlyCEO {
+        SiringClockAuction candidateContract = SiringClockAuction(_address);
+
+        // 验证协议符合标准 https://github.com/Lunyr/crowdsale-contracts/blob/cfadd15986c30521d8ba7d5b6f57b4fefcc7ac38/contracts/LunyrToken.sol#L117
+        require(candidateContract.isSiringClockAuction());
+
+        // 设置交配拍卖协议地址
+        siringAuction = candidateContract;
+    }
+
+    /// @dev 销售拍卖一只猫
+    function createSaleAuction(
+        uint256 _kittyId,
+        uint256 _startingPrice,
+        uint256 _endingPrice,
+        uint256 _duration
+    )
+        external
+        whenNotPaused
+    {
+        // 拍卖协议检查输入参数
+        // 如果已经在拍卖，那么主人会是拍卖所，因此会失败
+        require(_owns(msg.sender, _kittyId));
+        // 确认猫没有怀孕，从而协议意外获得一只小猫
+        // 注意：猫可以在修养期
+        require(!isPregnant(_kittyId));
+        _approve(_kittyId, saleAuction);
+
+        saleAuction.createAuction(
+            _kittyId,
+            _startingPrice,
+            _endingPrice,
+            _duration,
+            msg.sender
+        );
+    }
+
+    /// @dev 交配拍卖一只猫
+    ///  检查猫能否交配
+    function createSiringAuction(
+        uint256 _kittyId,
+        uint256 _startingPrice,
+        uint256 _endingPrice,
+        uint256 _duration
+    )
+        external
+        whenNotPaused
+    {
+      // 拍卖协议检查输入参数
+      // 如果已经在拍卖，那么主人会是拍卖所，因此会失败
+        require(_owns(msg.sender, _kittyId));
+        require(isReadyToBreed(_kittyId));
+        _approve(_kittyId, siringAuction);
+
+        siringAuction.createAuction(
+            _kittyId,
+            _startingPrice,
+            _endingPrice,
+            _duration,
+            msg.sender
+        );
+    }
+
+    /// @dev 出价并关闭一个交配拍卖
+    ///  将出价者的雄性和拍卖的猫交配
+    /// @param _sireId 雌性猫的Id
+    /// @param _matronId 雄性猫的Id
+    function bidOnSiringAuction(
+        uint256 _sireId,
+        uint256 _matronId
+    )
+        external
+        payable
+        whenNotPaused
+    {
+        // 拍卖协议会检查参数
+        require(_owns(msg.sender, _matronId));
+        require(isReadyToBreed(_matronId));
+        require(_canBreedWithViaAuction(_matronId, _sireId));
+
+        // 定义当前拍卖的价格
+        uint256 currentPrice = siringAuction.getCurrentPrice(_sireId);
+        require(msg.value >= currentPrice + autoBirthFee);
+
+        // 出价可能失败
+        siringAuction.bid.value(msg.value - autoBirthFee)(_sireId);
+        _breedWith(uint32(_matronId), uint32(_sireId));
+    }
+
+    /// @dev 转移拍卖的收入
+    function withdrawAuctionBalances() external onlyCLevel {
+        saleAuction.withdrawBalance();
+        siringAuction.withdrawBalance();
+    }
+}
