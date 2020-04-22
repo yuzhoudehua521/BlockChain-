@@ -1,0 +1,246 @@
+/// 基于ERC-721草案，管理猫的所有权
+
+contract KittyOwnership is KittyBase, ERC721 {
+
+    /// 基于ERC721，Name和symbol都是不可分割的Token
+    string public constant name = "CryptoKitties";
+    string public constant symbol = "CK";
+
+    // 返回猫的元数据
+    ERC721Metadata public erc721Metadata;
+
+    bytes4 constant InterfaceSignature_ERC165 =
+        bytes4(keccak256('supportsInterface(bytes4)'));
+
+    bytes4 constant InterfaceSignature_ERC721 =
+        bytes4(keccak256('name()')) ^
+        bytes4(keccak256('symbol()')) ^
+        bytes4(keccak256('totalSupply()')) ^
+        bytes4(keccak256('balanceOf(address)')) ^
+        bytes4(keccak256('ownerOf(uint256)')) ^
+        bytes4(keccak256('approve(address,uint256)')) ^
+        bytes4(keccak256('transfer(address,uint256)')) ^
+        bytes4(keccak256('transferFrom(address,address,uint256)')) ^
+        bytes4(keccak256('tokensOfOwner(address)')) ^
+        bytes4(keccak256('tokenMetadata(uint256,string)'));
+
+
+    ///  判断是否是自己支持的ERC721或ERC165接口
+    function supportsInterface(bytes4 _interfaceID) external view returns (bool)
+    {
+        // DEBUG ONLY
+        //require((InterfaceSignature_ERC165 == 0x01ffc9a7) && (InterfaceSignature_ERC721 == 0x9a20483d));
+
+        return ((_interfaceID == InterfaceSignature_ERC165) || (_interfaceID == InterfaceSignature_ERC721));
+    }
+
+    /// @dev 设置跟踪元数据的协议地址
+    ///  只能CEO操作
+    function setMetadataAddress(address _contractAddress) public onlyCEO {
+        erc721Metadata = ERC721Metadata(_contractAddress);
+    }
+
+    // 内部函数：假设所有输入参数有效
+    // 公共方法负责验证数据
+
+    /// @dev 判断一个地址是否是猫的主人
+    /// @param _claimant 判断的用户的地址
+    /// @param _tokenId 猫的ID，需要大于0
+    function _owns(address _claimant, uint256 _tokenId) internal view returns (bool) {
+        return kittyIndexToOwner[_tokenId] == _claimant;
+    }
+
+    /// @dev 判断一个地址能否领养一个猫
+    /// @param _claimant 判断的用户的地址
+    /// @param _tokenId 猫的ID，需要大于0
+    function _approvedFor(address _claimant, uint256 _tokenId) internal view returns (bool) {
+        return kittyIndexToApproved[_tokenId] == _claimant;
+    }
+
+    /// @dev 设置transferFrom()函数用到的可以领养的地址
+    ///  设为0，可以清除之前的设置
+    ///  NOTE: _approve() 仅是内部使用，并不发送Approval事件
+    ///  因为_approve()和transferFrom()共同用于拍卖
+    ///  没有必要额外多加事件
+    function _approve(uint256 _tokenId, address _approved) internal {
+        kittyIndexToApproved[_tokenId] = _approved;
+    }
+
+    /// @notice 返回一个地址拥有的猫的数量
+    /// @param _owner 判断的地址
+    /// @dev 用于兼容ERC-721
+    function balanceOf(address _owner) public view returns (uint256 count) {
+        return ownershipTokenCount[_owner];
+    }
+
+    /// @notice 把猫转到另一个地址，要确保ERC-721兼容，否则可能丢失猫
+    /// @param _to 接受者地址
+    /// @param _tokenId 猫的ID
+    /// @dev 用于兼容ERC-721
+    function transfer(
+        address _to,
+        uint256 _tokenId
+    )
+        external
+        whenNotPaused
+    {
+        // 放置转移到0x0
+        require(_to != address(0));
+        // 不能把猫转给协议本身
+        // 协议不拥有猫（特例是，0代猫刚被创建，进入拍卖前）
+        require(_to != address(this));
+        require(_to != address(saleAuction));
+        require(_to != address(siringAuction));
+
+        // 你只能转让自己的猫
+        require(_owns(msg.sender, _tokenId));
+
+        // 修改主人，清除领养列表，发出Transfer事件
+        _transfer(msg.sender, _to, _tokenId);
+    }
+
+    /// @notice 赋予一个地址通过transferFrom()获得猫的权利
+    /// @param _to 被授权的地址，ID为0是取消授权
+    /// @param _tokenId 猫的ID
+    /// @dev 用于兼容ERC-721
+    function approve(
+        address _to,
+        uint256 _tokenId
+    )
+        external
+        whenNotPaused
+    {
+        // 只有主人能够给予授权
+        require(_owns(msg.sender, _tokenId));
+
+        // 注册授权
+        _approve(_tokenId, _to);
+
+        // 发出Approval事件
+        Approval(msg.sender, _to, _tokenId);
+    }
+
+    /// @notice 从另一个主人手上获得他的一只猫的所有权，需要通过approval授权
+    /// @param _from 猫的当前主人的地址
+    /// @param _to 猫的新主人的地址
+    /// @param _tokenId 猫的ID
+    /// @dev 用于兼容ERC-721
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _tokenId
+    )
+        external
+        whenNotPaused
+    {
+        // 安全检查，防止转给地址0
+        require(_to != address(0));
+        // 不能把猫转给协议本身
+        // 协议不拥有猫（特例是，0代猫刚被创建，进入拍卖前）
+        require(_to != address(this));
+        require(_approvedFor(msg.sender, _tokenId));
+        require(_owns(_from, _tokenId));
+
+        // 修改主人，清除领养列表，发出Transfer事件
+        _transfer(_from, _to, _tokenId);
+    }
+
+    /// @notice 返回当前猫的总数
+    /// @dev 兼容ERC-721
+    function totalSupply() public view returns (uint) {
+        return kitties.length - 1;
+    }
+
+    /// @notice 返回一个猫的主人
+    /// @dev 兼容ERC-721
+    function ownerOf(uint256 _tokenId)
+        external
+        view
+        returns (address owner)
+    {
+        owner = kittyIndexToOwner[_tokenId];
+
+        require(owner != address(0));
+    }
+
+    /// @notice 返回一个主人的猫的列表
+    /// @param _owner 主人的地址
+    /// @dev 这个方法不要被协议调用，因为过于昂贵
+    ///  需要遍历所有的猫，而且结果的长度是动态的
+    function tokensOfOwner(address _owner) external view returns(uint256[] ownerTokens) {
+        uint256 tokenCount = balanceOf(_owner);
+
+        if (tokenCount == 0) {
+            // 如果没有猫，则为空
+            return new uint256[](0);
+        } else {
+            uint256[] memory result = new uint256[](tokenCount);
+            uint256 totalCats = totalSupply();
+            uint256 resultIndex = 0;
+
+            // 猫的ID从1开始自增
+            uint256 catId;
+
+            for (catId = 1; catId <= totalCats; catId++) {
+                if (kittyIndexToOwner[catId] == _owner) {
+                    result[resultIndex] = catId;
+                    resultIndex++;
+                }
+            }
+
+            return result;
+        }
+    }
+
+    /// @dev 源自memcpy() @arachnid (Nick Johnson <arachnid@notdot.net>)
+    ///  这个方法遵循Apache License.
+    ///  参考资料： https://github.com/Arachnid/solidity-stringutils/blob/2f6ca9accb48ae14c66f1437ec50ed19a0616f78/strings.sol
+    function _memcpy(uint _dest, uint _src, uint _len) private view {
+        // 尽量32位的拷贝
+        for(; _len >= 32; _len -= 32) {
+            assembly {
+                mstore(_dest, mload(_src))
+            }
+            _dest += 32;
+            _src += 32;
+        }
+
+        // 拷贝剩余内容
+        uint256 mask = 256 ** (32 - _len) - 1;
+        assembly {
+            let srcpart := and(mload(_src), not(mask))
+            let destpart := and(mload(_dest), mask)
+            mstore(_dest, or(destpart, srcpart))
+        }
+    }
+
+    /// @dev 源自toString(slice) @arachnid (Nick Johnson <arachnid@notdot.net>)
+    ///  这个方法遵循Apache License.
+    ///  参考资料： https://github.com/Arachnid/solidity-stringutils/blob/2f6ca9accb48ae14c66f1437ec50ed19a0616f78/strings.sol
+    function _toString(bytes32[4] _rawBytes, uint256 _stringLength) private view returns (string) {
+        var outputString = new string(_stringLength);
+        uint256 outputPtr;
+        uint256 bytesPtr;
+
+        assembly {
+            outputPtr := add(outputString, 32)
+            bytesPtr := _rawBytes
+        }
+
+        _memcpy(outputPtr, bytesPtr, _stringLength);
+
+        return outputString;
+    }
+
+    /// @notice 返回一个URI，指向该token遵循的ERC-721的元数据包
+    ///  (https://github.com/ethereum/EIPs/issues/721)
+    /// @param _tokenId 猫的ID
+    function tokenMetadata(uint256 _tokenId, string _preferredTransport) external view returns (string infoUrl) {
+        require(erc721Metadata != address(0));
+        bytes32[4] memory buffer;
+        uint256 count;
+        (buffer, count) = erc721Metadata.getMetadata(_tokenId, _preferredTransport);
+
+        return _toString(buffer, count);
+    }
+}
