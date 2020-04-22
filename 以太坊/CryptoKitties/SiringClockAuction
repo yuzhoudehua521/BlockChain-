@@ -1,0 +1,57 @@
+/// @title 交配拍卖功能
+/// @notice 我们实现了召回功能以规避错误的操作
+contract SiringClockAuction is ClockAuction {
+
+    // @dev 提供验证我们是交配拍卖的服务setSiringAuctionAddress()
+    bool public isSiringClockAuction = true;
+
+    // 构造函数
+    function SiringClockAuction(address _nftAddr, uint256 _cut) public
+        ClockAuction(_nftAddr, _cut) {}
+
+    /// @dev 创建一个拍卖，只有KittyCore能够调用
+    /// @param _tokenId 拍卖的token的Id
+    /// @param _startingPrice 起始价格
+    /// @param _endingPrice 终止价格
+    /// @param _duration 拍卖时长（秒）
+    /// @param _seller 卖家
+    function createAuction(
+        uint256 _tokenId,
+        uint256 _startingPrice,
+        uint256 _endingPrice,
+        uint256 _duration,
+        address _seller
+    )
+        external
+    {
+        // 溢出检查
+        require(_startingPrice == uint256(uint128(_startingPrice)));
+        require(_endingPrice == uint256(uint128(_endingPrice)));
+        require(_duration == uint256(uint64(_duration)));
+
+        require(msg.sender == address(nonFungibleContract));
+        _escrow(_seller, _tokenId);
+        Auction memory auction = Auction(
+            _seller,
+            uint128(_startingPrice),
+            uint128(_endingPrice),
+            uint64(_duration),
+            uint64(now)
+        );
+        _addAuction(_tokenId, auction);
+    }
+
+    /// @dev 出价，要求发起者是KittyCore，并且把猫送回主人
+    function bid(uint256 _tokenId)
+        external
+        payable
+    {
+        require(msg.sender == address(nonFungibleContract));
+        address seller = tokenIdToAuction[_tokenId].seller;
+        // 检查tokenId是否有效
+        _bid(_tokenId, msg.value);
+        // 把猫送回主人，出价者获得繁衍的小猫
+        _transfer(seller, _tokenId);
+    }
+
+}
