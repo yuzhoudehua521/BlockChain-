@@ -1,0 +1,3 @@
+无法安装Trufffle
+sudo npm i -g --unsafe-perm=true --allow-root truffle
+npm install -g truffle
