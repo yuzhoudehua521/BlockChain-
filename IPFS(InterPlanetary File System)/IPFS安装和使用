@@ -1,0 +1,11 @@
+node.js安装
+
+> git clone https://github.com/ipfs/js-ipfs.git
+> cd js-ipfs
+> npm install
+
+
+go安装
+$ git clone https://github.com/ipfs/go-ipfs.git
+$ cd go-ipfs
+$ make install
