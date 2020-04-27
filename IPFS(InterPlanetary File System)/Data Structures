@@ -1,1 +1,28 @@
+数据结构
+1.CID (Content Identifier)内容标识符
 
+cryptographic hash哈希加密，IPFS 使用 sha2-256 进行哈希运算，生成256位，32字节大小CID标识
+
+（1）哈希运算特点：
+1，确定性，相同输入产生相同输出
+2，不相关，微小变化便产生完全不同哈希
+3，单向，从散列重建数据不可行
+4，唯一，一个文件只能产生一个特定哈希
+
+（2）支持多重哈希算法（CIDv0）
+多重哈希使用TLV模式(type-length-value)，
+type：生成哈希算法的标识符，sha2-256为18（0x12）
+length:哈希实际长度
+value：真正哈希值
+
+为了紧凑字符串，不用二进制，使用base58btc编码，例如（QmY7Yh4UquoXHLPFo2XbhXkhBvFoPwmQUSa92pxnxjQuPU）
+
+（3）标识所使用的编码方法，便于解码（CIDv1）
+Multibase(编码库)-Version(版本号)-Multicode(dag-pb解码方式)-type-length-value
+
+版本转换
+v0-->v1
+multibase = base58btc
+multicodec = dag-pb
+multihash-algorithm = sha2-256
+multihash-length = 32 (32 bytes, equivalent to 256 bits)
