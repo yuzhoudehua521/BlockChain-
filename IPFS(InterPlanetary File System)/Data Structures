@@ -26,3 +26,24 @@ multibase = base58btc
 multicodec = dag-pb
 multihash-algorithm = sha2-256
 multihash-length = 32 (32 bytes, equivalent to 256 bits)
+
+
+
+
+2.Merkle tress（默克尔树）和Directed acyclic graphs(DAG有向无环图)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
